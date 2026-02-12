@@ -1,0 +1,17 @@
+#source <venv_directory_name>/bin/activate
+# --- Processamento de Linguagem e IA ---
+openai-whisper==20250625
+deep-translator==1.11.4
+torch==2.4.1
+numpy<2.0.0
+
+# --- Captura de Áudio ---
+sounddevice==0.5.1
+soundfile==0.12.1
+
+# --- Interface Gráfica e Motor Web (VLibras) ---
+PyQt6==6.7.1
+PyQt6-WebEngine==6.7.0
+
+# --- Utilitários ---
+certifi==2024.8.30
