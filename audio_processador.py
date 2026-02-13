@@ -79,7 +79,7 @@ class AudioProcessador(Observable):
         samples_accum = 0
         while self.running:
             try:
-                bloco = self.audio_queue.get(timeout=2)
+                bloco = self.audio_queue.get(timeout=2, block=True)
                 audio_buffer.append(bloco)
                 samples_accum += bloco.shape[0]
                 # Acumula até atingir o tempo mínimo

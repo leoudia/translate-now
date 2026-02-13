@@ -40,7 +40,6 @@ class CaptionBuffer:
     def run(self):
 
         while True:
-            # Se não há palavras, esperamos indefinidamente por uma
             if not self._words:
                 self._last_flush_time = time.time()
 
@@ -52,9 +51,8 @@ class CaptionBuffer:
 
             now = time.time()
             remaining = self.timeout - (now - self._last_flush_time)
-                # Aguarda a próxima palavra OU o tempo esgotar
+
             if remaining <= 0:
-                print("[CaptionBuffer] Tempo esgotado, realizando flush.")
                 self._flush()
 
     def _flush(self):
@@ -62,8 +60,6 @@ class CaptionBuffer:
             text = " ".join(self._words)
             self._words = []
             
-            # Executa o callback sequencialmente. 
-            # Como estamos em uma task dedicada, não bloqueia o microfone.
             try:
                 self.callback(text)
             except Exception as e:
@@ -87,19 +83,15 @@ class JanelaAcessivel(QMainWindow):
 
         self.buffer = CaptionBuffer(timeout=5, callback=self.send_buffered_caption)
 
-        # Layout Principal
         layout_principal = QHBoxLayout()
 
-        # 1. Área do Texto Traduzido (Esquerda)
         self.label_traducao = QLabel("Aguardando áudio...")
         self.label_traducao.setStyleSheet("color: #00FF00; font-size: 24px; font-weight: bold; padding: 20px;")
         self.label_traducao.setWordWrap(True)
         layout_principal.addWidget(self.label_traducao, stretch=2)
 
-        # 2. Área do Avatar VLibras (Direita)
         self.web_view = QWebEngineView()
-        # Aqui você carregaria um HTML local que contém o script do VLibras
-        # self.web_view.setHtml(html_com_vlibras)
+
         self.web_view.setUrl(QUrl("http://localhost:8080"))
         layout_principal.addWidget(self.web_view, stretch=1)
 
