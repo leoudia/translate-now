@@ -1,14 +1,78 @@
 import sys
+
+import queue
 from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 from PyQt6.QtCore import QUrl
 from PyQt6.QtCore import QObject, pyqtSignal
+import threading
 
 class AudioSignals(QObject):
     # Definimos os sinais que a interface vai "escutar"
     acessibilidade_recebida = pyqtSignal(str)
     traducao_recebida = pyqtSignal(str)
+
+
+import asyncio
+import time
+from typing import List, Callable, Optional
+
+class CaptionBuffer:
+    def __init__(self, timeout: int, callback: Callable[[str], asyncio.Future]):
+        self.timeout = timeout
+        self.callback = callback
+        self._words: List[str] = []
+        self.queue = queue.Queue()
+        self._last_flush_time = time.time()
+        self._worker_task = threading.Thread(target=self.run, daemon=True)
+
+        self.queue.put("")
+        
+
+    def add_word(self, word: str):
+        """Apenas insere na fila. Zero processamento pesado aqui."""
+        self.queue.put(word)
+
+    def start(self):
+        self._worker_task.start()
+    
+    def run(self):
+
+        while True:
+            # Se não há palavras, esperamos indefinidamente por uma
+            if not self._words:
+                self._last_flush_time = time.time()
+
+            try:
+                word = self.queue.get(timeout=self.timeout, block=True)
+                self._words.append(word)
+            except queue.Empty:
+                continue;
+
+            now = time.time()
+            remaining = self.timeout - (now - self._last_flush_time)
+                # Aguarda a próxima palavra OU o tempo esgotar
+            if remaining <= 0:
+                print("[CaptionBuffer] Tempo esgotado, realizando flush.")
+                self._flush()
+
+    def _flush(self):
+        if self._words:
+            text = " ".join(self._words)
+            self._words = []
+            
+            # Executa o callback sequencialmente. 
+            # Como estamos em uma task dedicada, não bloqueia o microfone.
+            try:
+                self.callback(text)
+            except Exception as e:
+                print(f"Erro no callback de legenda: {e}")
+            
+            self._last_flush_time = time.time()
+
+    def stop(self):
+        self._worker.cancel()
 
 class JanelaAcessivel(QMainWindow):
     def __init__(self):
@@ -20,6 +84,8 @@ class JanelaAcessivel(QMainWindow):
         self.signals = AudioSignals()
         self.signals.acessibilidade_recebida.connect(self.view_accessibility)
         self.signals.traducao_recebida.connect(self.view_caption)
+
+        self.buffer = CaptionBuffer(timeout=5, callback=self.send_buffered_caption)
 
         # Layout Principal
         layout_principal = QHBoxLayout()
@@ -41,14 +107,20 @@ class JanelaAcessivel(QMainWindow):
         container.setLayout(layout_principal)
         self.setCentralWidget(container)
 
+        self.buffer.start()
+
     def update_accessibility(self, texto):
         if texto:
             self.signals.acessibilidade_recebida.emit(texto)
 
     def update_caption(self, texto):
         if texto:
-            self.signals.traducao_recebida.emit(texto)
+            self.buffer.add_word(texto)
 
+    def send_buffered_caption(self, texto):
+        if texto:
+            self.signals.traducao_recebida.emit(texto)
+    
     def view_accessibility(self, texto):
         try:
             self.web_view.page().runJavaScript(f"window.plugin.translate('{texto}');")
